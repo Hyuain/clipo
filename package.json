@@ -1,0 +1,22 @@
+{
+  "name": "clipo",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hyuain/clipo.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Hyuain/clipo/issues"
+  },
+  "homepage": "https://github.com/Hyuain/clipo#readme",
+  "devDependencies": {
+    "electron": "^18.0.4"
+  }
+}
