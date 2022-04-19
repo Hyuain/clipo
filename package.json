@@ -18,5 +18,8 @@
   "homepage": "https://github.com/Hyuain/clipo#readme",
   "devDependencies": {
     "electron": "^18.0.4"
+  },
+  "dependencies": {
+    "tesseract.js": "^2.1.5"
   }
 }

@@ -1,6 +1,6 @@
 const { screen, BrowserWindow, ipcMain, desktopCapturer} = require('electron')
 const path = require('path')
-const fs = require('fs')
+const { recognize } = require('../../ocr/ocr-worker')
 
 let captureMask = null
 
@@ -43,16 +43,27 @@ const showCaptureMask = () => {
     })
   })
 
-  ipcMain.once('finishedScreenshotEdit', (event, data) => {
+  ipcMain.on('finishedScreenshotEdit', async (event, data) => {
     const base64Image = data.replace(/^data:image\/png;base64,/, "")
-    fs.writeFile('screenshot.png', base64Image, {
-      encoding: 'base64'
-    }, (err) => {
-      console.log('write file error', err)
-    })
+    const { data: { text } } = await recognize(data)
+    console.log("xxxAfterRecognize", text)
+    // Tesseract.recognize(
+    //   data,
+    //   'eng+chi_tra',
+    //   { logger: m => console.log(m) }
+    // ).then((res) => {
+    //   console.log("recRes", res.data.text)
+    // })
+    // fs.writeFile('screenshot.png', base64Image, {
+    //   encoding: 'base64'
+    // }, (err) => {
+    //   console.log('write file error', err)
+    // })
   })
 }
 
 module.exports = {
   showCaptureMask,
 }
+
+
