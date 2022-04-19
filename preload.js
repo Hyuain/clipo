@@ -1,3 +1,7 @@
 const exposeApi = require('./utils/expose-api')
 
-exposeApi('showCaptureMask')
+exposeApi({
+  ipcRendererConfig: {
+    validSendChannels: ['showCaptureMask'],
+  }
+})

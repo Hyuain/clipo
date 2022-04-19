@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
-const showCaptureMask = require('./libs/capture-screen/capture-mask/capture-mask-main')
+const { showCaptureMask } = require('./libs/capture-screen/capture-mask/capture-mask-main')
 
 const createWindow = () => {
   const win = new BrowserWindow({

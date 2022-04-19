@@ -1,12 +1,12 @@
 const { screen, BrowserWindow, ipcMain, desktopCapturer} = require('electron')
 const path = require('path')
 
-let captureWin = null
+let captureMask = null
 
-module.exports = () => {
-  if (captureWin) { return }
+const showCaptureMask = () => {
+  if (captureMask) { return }
   let { width, height } = screen.getPrimaryDisplay().bounds
-  captureWin = new BrowserWindow({
+  captureMask = new BrowserWindow({
     // TODO: windows 使用 fullscreen, mac 设置为 undefined
     fullscreen: process.platform === 'win32' || undefined,
     width,
@@ -25,21 +25,26 @@ module.exports = () => {
       preload: path.join(__dirname, 'capture-mask-preload.js'),
     }
   })
-  captureWin.setAlwaysOnTop(true, 'screen-saver')
-  captureWin.setVisibleOnAllWorkspaces(true)
-  captureWin.setFullScreenable(false)
-  captureWin.webContents.openDevTools()
+  captureMask.setAlwaysOnTop(true, 'screen-saver')
+  captureMask.setVisibleOnAllWorkspaces(true)
+  captureMask.setFullScreenable(false)
+  captureMask.webContents.openDevTools()
 
-  captureWin.loadFile(path.join(__dirname, 'capture-mask.html'))
+  captureMask.loadFile(path.join(__dirname, 'capture-mask.html'))
 
-  captureWin.on('closed', () => {
-    captureWin = null
+  captureMask.on('closed', () => {
+    captureMask = null
   })
 
   ipcMain.once('captureMaskReady', () => {
-    desktopCapturer.getSources({ types: ['screen'] }).then((res) => {
-      console.log(res)
+    desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
+      captureMask.webContents.send('setScreenshot', sources[0].id)
+      // const src = res[0].thumbnail.toDataURL()
+      // bg.style.backgroundImage = `url(${src})`
     })
   })
+}
 
+module.exports = {
+  showCaptureMask,
 }
