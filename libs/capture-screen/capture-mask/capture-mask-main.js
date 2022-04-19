@@ -39,8 +39,6 @@ const showCaptureMask = () => {
   ipcMain.once('captureMaskReady', () => {
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
       captureMask.webContents.send('setScreenshot', sources[0].id)
-      // const src = res[0].thumbnail.toDataURL()
-      // bg.style.backgroundImage = `url(${src})`
     })
   })
 }

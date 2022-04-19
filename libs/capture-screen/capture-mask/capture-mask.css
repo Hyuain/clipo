@@ -1,11 +1,14 @@
 body {
   margin: 0;
   padding: 0;
+  position: relative;
+  box-sizing: border-box;
 }
 
 #bg {
   width: 100%;
   height: 100%;
+  position: absolute;
 }
 
 #bg::after {
@@ -16,4 +19,8 @@ body {
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.1);
+}
+
+.draw-canvas {
+  position: absolute;
 }
