@@ -1,5 +1,6 @@
 const { screen, BrowserWindow, ipcMain, desktopCapturer} = require('electron')
 const path = require('path')
+const fs = require('fs')
 
 let captureMask = null
 
@@ -38,7 +39,16 @@ const showCaptureMask = () => {
 
   ipcMain.once('captureMaskReady', () => {
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
-      captureMask.webContents.send('setScreenshot', sources[0].id)
+      captureMask.webContents.send('gotRawScreenshot', sources[0].id)
+    })
+  })
+
+  ipcMain.once('finishedScreenshotEdit', (event, data) => {
+    const base64Image = data.replace(/^data:image\/png;base64,/, "")
+    fs.writeFile('screenshot.png', base64Image, {
+      encoding: 'base64'
+    }, (err) => {
+      console.log('write file error', err)
     })
   })
 }

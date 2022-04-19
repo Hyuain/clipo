@@ -5,7 +5,7 @@ ipcRenderer.send('captureMaskReady')
 
 let bgCanvas
 
-ipcRenderer.on('setScreenshot', async (event, sourceId) => {
+ipcRenderer.on('gotRawScreenshot', async (event, sourceId) => {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: {
@@ -43,6 +43,7 @@ ipcRenderer.on('setScreenshot', async (event, sourceId) => {
 
 let isDragging = false
 let startPosition
+let selectedArea
 let canvas
 
 document.addEventListener('mousedown', (e) => {
@@ -86,8 +87,23 @@ document.addEventListener('mousemove', (e) => {
   // const bgCtx = bgCanvas.getContext('2d')
   // const imgData = bgCtx.getImageData(startPosition.x, startPosition.y, width, height)
   // ctx.putImageData(imgData, 0, 0)
+  selectedArea = {
+    x: startPosition.x,
+    y: startPosition.y,
+    width: width,
+    height: height
+  }
 })
 
 document.addEventListener('mouseup', (e) => {
   isDragging = false
+  const { x, y, width, height } = selectedArea
+  const bgCtx = bgCanvas.getContext('2d')
+  const imageData = bgCtx.getImageData(x, y, width, height)
+  const resCanvas = document.createElement('canvas')
+  resCanvas.width = width
+  resCanvas.height = height
+  const resCtx = resCanvas.getContext('2d')
+  resCtx.putImageData(imageData, 0, 0)
+  ipcRenderer.send('finishedScreenshotEdit', resCanvas.toDataURL())
 })
