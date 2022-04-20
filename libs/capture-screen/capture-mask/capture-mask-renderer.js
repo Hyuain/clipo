@@ -27,13 +27,13 @@ ipcRenderer.on('gotRawScreenshot', async (event, sourceId) => {
     video.play()
     video.style.height = video.videoHeight + 'px'
     video.style.width = video.videoWidth + 'px'
-    video.style.border = '1px solid red'
     bgCanvas = document.createElement('canvas')
     bgCanvas.width = video.videoWidth
     bgCanvas.height = video.videoHeight
     const bgCtx = bgCanvas.getContext('2d')
     bgCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight)
     bg.style.backgroundImage = `url(${bgCanvas.toDataURL()})`
+    bg.className = 'gray-mask'
     video.remove()
     video = null
     document.body.style.cursor = prevCursor
@@ -84,32 +84,16 @@ document.addEventListener('mousemove', (e) => {
   canvas.width = width + 2 * CANVAS_MARGIN
   canvas.height = height + 2 * CANVAS_MARGIN
 
-  const ctx = canvas.getContext('2d')
-
-  // ctx.drawImage(bgCanvas, startPosition.x, startPosition.y, width, height, 0, 0, width, height)
-  ctx.fillStyle = COLOR.WHITE
-  ctx.strokeStyle = COLOR.PRIMARY
-  ctx.lineWidth = 2
-  ctx.strokeRect(CANVAS_MARGIN, CANVAS_MARGIN, width, height)
-  // const bgCtx = bgCanvas.getContext('2d')
-  // const imgData = bgCtx.getImageData(startPosition.x, startPosition.y, width, height)
-  // ctx.putImageData(imgData, 0, 0)
-  const circle = new Path2D()
-  circle.arc(CANVAS_MARGIN, CANVAS_MARGIN, ANCHOR_RADIUS, 0, 2 * Math.PI)
-  const circleBorder = new Path2D()
-  circleBorder.arc(CANVAS_MARGIN, CANVAS_MARGIN, ANCHOR_RADIUS, 0, 2 * Math.PI)
-  ctx.fillStyle = COLOR.PRIMARY
-  ctx.strokeStyle = COLOR.WHITE
-  ctx.lineWidth = 1
-  ctx.fill(circle)
-  ctx.stroke(circleBorder)
-
   selectedArea = {
     x: startPosition.x,
     y: startPosition.y,
     width: width,
     height: height
   }
+
+  drawImage()
+  drawBorder()
+  drawAnchors()
 })
 
 document.addEventListener('mouseup', (e) => {
@@ -124,3 +108,38 @@ document.addEventListener('mouseup', (e) => {
   resCtx.putImageData(imageData, 0, 0)
   ipcRenderer.send('finishedScreenshotEdit', resCanvas.toDataURL())
 })
+
+const drawImage = () => {
+  const { x, y, width, height } = selectedArea
+  const ctx = canvas.getContext('2d')
+
+  ctx.drawImage(bgCanvas, x, y, width, height, CANVAS_MARGIN, CANVAS_MARGIN, width, height)
+  // const bgCtx = bgCanvas.getContext('2d')
+  // const imgData = bgCtx.getImageData(startPosition.x, startPosition.y, width, height)
+  // ctx.putImageData(imgData, 0, 0)
+}
+
+const drawBorder = () => {
+  const { x, y, width, height } = selectedArea
+  const ctx = canvas.getContext('2d')
+
+  ctx.fillStyle = COLOR.WHITE
+  ctx.strokeStyle = COLOR.PRIMARY
+  ctx.lineWidth = 2
+  ctx.strokeRect(CANVAS_MARGIN, CANVAS_MARGIN, width, height)
+}
+
+const drawAnchors = () => {
+  const { x, y, width, height } = selectedArea
+  const ctx = canvas.getContext('2d')
+
+  const circle = new Path2D()
+  circle.arc(CANVAS_MARGIN, CANVAS_MARGIN, ANCHOR_RADIUS, 0, 2 * Math.PI)
+  const circleBorder = new Path2D()
+  circleBorder.arc(CANVAS_MARGIN, CANVAS_MARGIN, ANCHOR_RADIUS, 0, 2 * Math.PI)
+  ctx.fillStyle = COLOR.PRIMARY
+  ctx.strokeStyle = COLOR.WHITE
+  ctx.lineWidth = 1
+  ctx.fill(circle)
+  ctx.stroke(circleBorder)
+}
