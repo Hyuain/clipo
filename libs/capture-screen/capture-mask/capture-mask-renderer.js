@@ -72,14 +72,16 @@ ipcRenderer.on('gotRawScreenshot', async (event, sourceId) => {
 
     container.appendChild(bgCanvas)
     container.appendChild(canvas)
+
+    addEvents()
   }
   document.body.appendChild(video)
 })
 
 let isDragging = false
-let startPosition
-let selectedArea
-let resizeDirection
+let startPosition = {}
+let selectedArea = {}
+let resizeDirection = null
 
 const CANVAS_MARGIN = 8
 const ANCHOR_RADIUS = 4
@@ -90,52 +92,140 @@ const COLOR =  {
 }
 const anchorsPaths = new Set()
 
-document.addEventListener('mousedown', (e) => {
-  isDragging = true
-  for ({ path, position } of anchorsPaths) {
-    if (!ctx.isPointInPath(path, e.clientX, e.clientY)) { continue }
-    resizeDirection = position
-    if (resizeDirection === "leftMiddle") {
-      startPosition = {
+// config the behaviours when mousedown/mousemove on anchors
+const anchorConfigs = () => {
+  return {
+    leftTop: {
+      // the startPosition when mousedown on the anchor
+      startPosition: {
+        x: selectedArea.x + selectedArea.width,
+        y: selectedArea.y + selectedArea.height,
+      },
+      // the method to get the new coordinate of the selectedArea when drag the anchor
+      determineSelectedAreaCoordinate,
+      // the cursor when mouseover the anchor
+      cursor: 'nwse-resize',
+    },
+    leftMiddle: {
+      startPosition: {
         x: selectedArea.x + selectedArea.width,
         y: selectedArea.y
-      }
-    } else if (resizeDirection === "middleTop") {
-      startPosition = {
+      },
+      determineSelectedAreaCoordinate(x, y) {
+        return determineSelectedAreaCoordinate(x, selectedArea.y + selectedArea.height)
+      },
+      cursor: 'ew-resize',
+    },
+    leftBottom: {
+      startPosition: {
+        x: selectedArea.x + selectedArea.width,
+        y: selectedArea.y
+      },
+      determineSelectedAreaCoordinate,
+      cursor: 'nesw-resize',
+    },
+    middleTop: {
+      startPosition: {
         x: selectedArea.x,
         y: selectedArea.y + selectedArea.height,
-      }
-    } else {
-      startPosition = {
+      },
+      determineSelectedAreaCoordinate(x, y) {
+        return determineSelectedAreaCoordinate(selectedArea.x + selectedArea.width, y)
+      },
+      cursor: 'ns-resize',
+    },
+    middleBottom: {
+      startPosition: {
         x: selectedArea.x,
-        y: selectedArea.y,
+        y: selectedArea.y
+      },
+      determineSelectedAreaCoordinate(x, y) {
+        return determineSelectedAreaCoordinate(selectedArea.x + selectedArea.width, y)
+      },
+      cursor: 'ns-resize',
+    },
+    rightTop: {
+      startPosition: {
+        x: selectedArea.x,
+        y: selectedArea.y + selectedArea.height,
+      },
+      determineSelectedAreaCoordinate,
+      cursor: 'nesw-resize',
+    },
+    rightMiddle: {
+      startPosition: {
+        x: selectedArea.x,
+        y: selectedArea.y
+      },
+      determineSelectedAreaCoordinate(x, y) {
+        return determineSelectedAreaCoordinate(x, selectedArea.y + selectedArea.height)
+      },
+      cursor: 'ew-resize',
+    },
+    rightBottom: {
+      startPosition: {
+        x: selectedArea.x,
+        y: selectedArea.y
+      },
+      determineSelectedAreaCoordinate,
+      cursor: 'nwse-resize',
+    },
+    null: {
+      determineSelectedAreaCoordinate,
+    }
+  }
+}
+
+const addEvents = () => {
+  document.addEventListener('mousedown', (e) => {
+    isDragging = true
+    resizeDirection = null
+    for ({ path, position } of anchorsPaths) {
+      if (ctx.isPointInPath(path, e.clientX, e.clientY)) {
+        resizeDirection = position
+        break
       }
     }
-    return
-  }
-  startPosition = {
-    x: e.clientX,
-    y: e.clientY
-  }
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-})
+    startPosition = resizeDirection
+      ? anchorConfigs()[resizeDirection].startPosition
+      : { x: e.clientX, y: e.clientY }
+    if (!resizeDirection) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+    }
+  })
 
-document.addEventListener('mousemove', (e) => {
-  if (!isDragging) { return }
-  this.drawSelectedArea(e)
-})
+  document.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      this.drawSelectedArea(e)
+    }
+    if (['leftMiddle', 'rightMiddle', 'middleTop', 'middleBottom'].includes(resizeDirection)) {
+      setCursor(anchorConfigs()[resizeDirection].cursor)
+    } else {
+      for ({ path, position } of anchorsPaths) {
+        if (!ctx.isPointInPath(path, e.clientX, e.clientY)) { continue }
+        setCursor(anchorConfigs()[position].cursor)
+        return
+      }
+      setCursor()
+    }
+  })
 
-document.addEventListener('mouseup', (e) => {
-  isDragging = false
-  let { x, y, width, height } = selectedArea
-  const imageData = srcCanvas.getContext('2d').getImageData(x, y, width, height)
-  const resCanvas = document.createElement('canvas')
-  resCanvas.width = width
-  resCanvas.height = height
-  const resCtx = resCanvas.getContext('2d')
-  resCtx.putImageData(imageData, 0, 0)
-  ipcRenderer.send('finishedScreenshotEdit', resCanvas.toDataURL())
-})
+  document.addEventListener('mouseup', (e) => {
+    isDragging = false
+    resizeDirection = null
+    let { x, y, width, height } = selectedArea
+    const imageData = srcCanvas.getContext('2d').getImageData(x, y, width, height)
+    const resCanvas = document.createElement('canvas')
+    resCanvas.width = width
+    resCanvas.height = height
+    setCursor()
+    const resCtx = resCanvas.getContext('2d')
+    resCtx.putImageData(imageData, 0, 0)
+    ipcRenderer.send('finishedScreenshotEdit', resCanvas.toDataURL())
+  })
+}
+
+
 
 // draw image in the selection area
 const drawImage = () => {
@@ -193,32 +283,13 @@ const drawAnchor = ({ x, y, position }) => {
   anchorsPaths.add({ path: hotSpot, position })
 }
 
-const cursorMap = {
-  leftTop: "nwse-resize",
-  leftMiddle: "ew-resize",
-  leftBottom: "nesw-resize",
-  middleTop: "ns-resize",
-  middleBottom: "ns-resize",
-  rightTop: "nesw-resize",
-  rightMiddle: "ew-resize",
-  rightBottom: "nwse-resize",
-}
-
 function drawSelectedArea(e) {
   const x = e.clientX
   const y = e.clientY
 
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-  if (!resizeDirection || ['leftTop', 'leftBottom', 'rightTop', 'rightBottom'].includes(resizeDirection)) {
-    selectedArea = determineSelectedAreaCoordinate(x, y)
-  }
-  if (['leftMiddle', 'rightMiddle'].includes(resizeDirection)) {
-    selectedArea = determineSelectedAreaCoordinate(x, selectedArea.y + selectedArea.height)
-  }
-  if (['middleTop', 'middleBottom'].includes(resizeDirection)) {
-    selectedArea = determineSelectedAreaCoordinate(selectedArea.x + selectedArea.width, y)
-  }
+  selectedArea = anchorConfigs()[resizeDirection].determineSelectedAreaCoordinate(x, y)
 
   // prevent error when get the selected image data from srcCanvas
   if (!selectedArea.width || !selectedArea.height) {
