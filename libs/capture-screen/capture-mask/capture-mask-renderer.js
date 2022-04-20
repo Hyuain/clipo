@@ -3,7 +3,14 @@ document.body.style.cursor = 'none'
 
 ipcRenderer.send('captureMaskReady')
 
+// the canvas to save the original screenshot data
+let srcCanvas
+// the background canvas, containing the screenshot and the gray mask
 let bgCanvas
+// the canvas to draw the selection area
+let canvas
+// the context of the canvas of the selection area
+let ctx
 
 ipcRenderer.on('gotRawScreenshot', async (event, sourceId) => {
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -27,16 +34,39 @@ ipcRenderer.on('gotRawScreenshot', async (event, sourceId) => {
     video.play()
     video.style.height = video.videoHeight + 'px'
     video.style.width = video.videoWidth + 'px'
+
+    // create srcCanvas to save the original screenshot data
+    srcCanvas = document.createElement('canvas')
+    srcCanvas.width = video.videoWidth
+    srcCanvas.height = video.videoHeight
+    srcCanvas.getContext('2d').drawImage(video, 0, 0)
+
+    // draw the background canvas filled with gray mask
     bgCanvas = document.createElement('canvas')
-    bgCanvas.width = video.videoWidth
-    bgCanvas.height = video.videoHeight
+    bgCanvas.width = srcCanvas.width
+    bgCanvas.height = srcCanvas.height
+    bgCanvas.style.position = 'absolute'
     const bgCtx = bgCanvas.getContext('2d')
-    bgCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight)
-    bg.style.backgroundImage = `url(${bgCanvas.toDataURL()})`
-    bg.className = 'gray-mask'
+    bgCtx.drawImage(srcCanvas, 0, 0)
+    bgCtx.fillStyle = 'rgba(0, 0, 0, 0.5)'
+    bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height)
+
+    // create the canvas to draw the selection area
+    canvas = document.createElement('canvas')
+    canvas.width = srcCanvas.width
+    canvas.height = srcCanvas.height
+    canvas.style.position = 'absolute'
+    ctx = canvas.getContext('2d')
+    ctx.fillStyle = 'rgba(255, 255, 255, 0)'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    // clear the video element and reset cursor
     video.remove()
     video = null
     document.body.style.cursor = prevCursor
+
+    container.appendChild(bgCanvas)
+    container.appendChild(canvas)
   }
   document.body.appendChild(video)
 })
@@ -44,8 +74,6 @@ ipcRenderer.on('gotRawScreenshot', async (event, sourceId) => {
 let isDragging = false
 let startPosition
 let selectedArea
-let canvas
-let ctx
 const CANVAS_MARGIN = 8
 const ANCHOR_RADIUS = 4
 const COLOR =  {
@@ -59,16 +87,7 @@ document.addEventListener('mousedown', (e) => {
     x: e.clientX,
     y: e.clientY
   }
-
-  canvas = document.createElement('canvas')
-  canvas.className = 'draw-canvas'
-  canvas.style.left = startPosition.x - CANVAS_MARGIN + 'px'
-  canvas.style.top = startPosition.y - CANVAS_MARGIN + 'px'
-  canvas.height = CANVAS_MARGIN
-  canvas.width = CANVAS_MARGIN
-
-  ctx = canvas.getContext('2d')
-  document.body.appendChild(canvas)
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
 })
 
 document.addEventListener('mousemove', (e) => {
@@ -79,11 +98,10 @@ document.addEventListener('mousemove', (e) => {
 
   console.log("xxx", width, height)
 
+  // prevent error when get the selected image data from srcCanvas
   if (!width || !height) { return }
 
-  // reset width and height will clear canvas
-  canvas.width = width + 2 * CANVAS_MARGIN
-  canvas.height = height + 2 * CANVAS_MARGIN
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
 
   selectedArea = {
     x: startPosition.x,
@@ -99,9 +117,16 @@ document.addEventListener('mousemove', (e) => {
 
 document.addEventListener('mouseup', (e) => {
   isDragging = false
-  const { x, y, width, height } = selectedArea
-  const bgCtx = bgCanvas.getContext('2d')
-  const imageData = bgCtx.getImageData(x, y, width, height)
+  let { x, y, width, height } = selectedArea
+  if (width < 0) {
+    x += width
+    width = -width
+  }
+  if (height < 0) {
+    y += height
+    height = -height
+  }
+  const imageData = srcCanvas.getContext('2d').getImageData(x, y, width, height)
   const resCanvas = document.createElement('canvas')
   resCanvas.width = width
   resCanvas.height = height
@@ -110,35 +135,35 @@ document.addEventListener('mouseup', (e) => {
   ipcRenderer.send('finishedScreenshotEdit', resCanvas.toDataURL())
 })
 
+// draw image in the selection area
 const drawImage = () => {
   const { x, y, width, height } = selectedArea
 
-  ctx.drawImage(bgCanvas, x, y, width, height, CANVAS_MARGIN, CANVAS_MARGIN, width, height)
-  // const bgCtx = bgCanvas.getContext('2d')
-  // const imgData = bgCtx.getImageData(startPosition.x, startPosition.y, width, height)
-  // ctx.putImageData(imgData, 0, 0)
+  ctx.drawImage(srcCanvas, x, y, width, height, x, y, width, height)
 }
 
+// draw border of the selection area
 const drawBorder = () => {
   const { x, y, width, height } = selectedArea
 
   ctx.fillStyle = COLOR.WHITE
   ctx.strokeStyle = COLOR.PRIMARY
   ctx.lineWidth = 2
-  ctx.strokeRect(CANVAS_MARGIN, CANVAS_MARGIN, width, height)
+  ctx.strokeRect(x, y, width, height)
 }
 
+// draw anchors in border of the selection area
 const drawAnchors = () => {
   const { x, y, width, height } = selectedArea
   const anchors = [
-    { x: CANVAS_MARGIN, y: CANVAS_MARGIN },
-    { x: CANVAS_MARGIN, y: height / 2 + CANVAS_MARGIN },
-    { x: CANVAS_MARGIN, y: height + CANVAS_MARGIN },
-    { x: width / 2 + CANVAS_MARGIN, y: CANVAS_MARGIN },
-    { x: width / 2 + CANVAS_MARGIN, y: height + CANVAS_MARGIN },
-    { x: width + CANVAS_MARGIN, y: CANVAS_MARGIN },
-    { x: width + CANVAS_MARGIN, y: height / 2 + CANVAS_MARGIN },
-    { x: width + CANVAS_MARGIN, y: height + CANVAS_MARGIN },
+    { x, y },
+    { x, y: y + height / 2 },
+    { x, y: y + height },
+    { x: x + width / 2, y },
+    { x: x + width / 2, y: y + height },
+    { x: x + width, y },
+    { x: x + width, y: y + height / 2 },
+    { x: x + width, y: y + height },
   ]
   anchors.forEach((config) => {
     drawAnchor(config)
