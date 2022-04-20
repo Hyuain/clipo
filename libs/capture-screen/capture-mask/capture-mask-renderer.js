@@ -1,5 +1,10 @@
-const prevCursor = document.body.style.cursor
-document.body.style.cursor = 'none'
+const defaultCursor = document.body.style.cursor
+
+const setCursor = (cursor = defaultCursor) => {
+  document.body.style.cursor = cursor
+}
+
+setCursor('none')
 
 ipcRenderer.send('captureMaskReady')
 
@@ -57,13 +62,13 @@ ipcRenderer.on('gotRawScreenshot', async (event, sourceId) => {
     canvas.height = srcCanvas.height
     canvas.style.position = 'absolute'
     ctx = canvas.getContext('2d')
-    ctx.fillStyle = 'rgba(255, 255, 255, 0)'
+    ctx.fillStyle = COLOR.TRANSPARENT
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     // clear the video element and reset cursor
     video.remove()
     video = null
-    document.body.style.cursor = prevCursor
+    setCursor()
 
     container.appendChild(bgCanvas)
     container.appendChild(canvas)
@@ -74,15 +79,40 @@ ipcRenderer.on('gotRawScreenshot', async (event, sourceId) => {
 let isDragging = false
 let startPosition
 let selectedArea
+let resizeDirection
+
 const CANVAS_MARGIN = 8
 const ANCHOR_RADIUS = 4
 const COLOR =  {
   PRIMARY: '#67bade',
   WHITE: '#fff',
+  TRANSPARENT: 'rgba(255, 255, 255, 0)'
 }
+const anchorsPaths = new Set()
 
 document.addEventListener('mousedown', (e) => {
   isDragging = true
+  for ({ path, position } of anchorsPaths) {
+    if (!ctx.isPointInPath(path, e.clientX, e.clientY)) { continue }
+    resizeDirection = position
+    if (resizeDirection === "leftMiddle") {
+      startPosition = {
+        x: selectedArea.x + selectedArea.width,
+        y: selectedArea.y
+      }
+    } else if (resizeDirection === "middleTop") {
+      startPosition = {
+        x: selectedArea.x,
+        y: selectedArea.y + selectedArea.height,
+      }
+    } else {
+      startPosition = {
+        x: selectedArea.x,
+        y: selectedArea.y,
+      }
+    }
+    return
+  }
   startPosition = {
     x: e.clientX,
     y: e.clientY
@@ -92,40 +122,12 @@ document.addEventListener('mousedown', (e) => {
 
 document.addEventListener('mousemove', (e) => {
   if (!isDragging) { return }
-
-  const width = e.clientX - startPosition.x
-  const height = e.clientY - startPosition.y
-
-  console.log("xxx", width, height)
-
-  // prevent error when get the selected image data from srcCanvas
-  if (!width || !height) { return }
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-  selectedArea = {
-    x: startPosition.x,
-    y: startPosition.y,
-    width: width,
-    height: height
-  }
-
-  drawImage()
-  drawBorder()
-  drawAnchors()
+  this.drawSelectedArea(e)
 })
 
 document.addEventListener('mouseup', (e) => {
   isDragging = false
   let { x, y, width, height } = selectedArea
-  if (width < 0) {
-    x += width
-    width = -width
-  }
-  if (height < 0) {
-    y += height
-    height = -height
-  }
   const imageData = srcCanvas.getContext('2d').getImageData(x, y, width, height)
   const resCanvas = document.createElement('canvas')
   resCanvas.width = width
@@ -155,16 +157,18 @@ const drawBorder = () => {
 // draw anchors in border of the selection area
 const drawAnchors = () => {
   const { x, y, width, height } = selectedArea
+  // the position will be correct only when the width and height are positive
   const anchors = [
-    { x, y },
-    { x, y: y + height / 2 },
-    { x, y: y + height },
-    { x: x + width / 2, y },
-    { x: x + width / 2, y: y + height },
-    { x: x + width, y },
-    { x: x + width, y: y + height / 2 },
-    { x: x + width, y: y + height },
+    { x, y, position: "leftTop" },
+    { x, y: y + height / 2, position: "leftMiddle" },
+    { x, y: y + height, position: "leftBottom" },
+    { x: x + width / 2, y, position: "middleTop" },
+    { x: x + width / 2, y: y + height, position: "middleBottom" },
+    { x: x + width, y, position: "rightTop" },
+    { x: x + width, y: y + height / 2, position: "rightMiddle" },
+    { x: x + width, y: y + height, position: "rightBottom" },
   ]
+  anchorsPaths.clear()
   anchors.forEach((config) => {
     drawAnchor(config)
   })
@@ -172,14 +176,69 @@ const drawAnchors = () => {
   drawAnchor(CANVAS_MARGIN, CANVAS_MARGIN)
 }
 
-const drawAnchor = ({ x, y }) => {
+const drawAnchor = ({ x, y, position }) => {
+  const hotSpot = new Path2D()
+  hotSpot.arc(x, y, ANCHOR_RADIUS * 10, 0, 2 * Math.PI)
+  ctx.fillStyle = COLOR.TRANSPARENT
+  ctx.fill(hotSpot)
   const circle = new Path2D()
   circle.arc(x, y, ANCHOR_RADIUS, 0, 2 * Math.PI)
-  const circleBorder = new Path2D()
-  circleBorder.arc(x, y, ANCHOR_RADIUS, 0, 2 * Math.PI)
   ctx.fillStyle = COLOR.PRIMARY
+  ctx.fill(circle)
+  const border = new Path2D()
+  border.arc(x, y, ANCHOR_RADIUS, 0, 2 * Math.PI)
   ctx.strokeStyle = COLOR.WHITE
   ctx.lineWidth = 1
-  ctx.fill(circle)
-  ctx.stroke(circleBorder)
+  ctx.stroke(border)
+  anchorsPaths.add({ path: hotSpot, position })
+}
+
+const cursorMap = {
+  leftTop: "nwse-resize",
+  leftMiddle: "ew-resize",
+  leftBottom: "nesw-resize",
+  middleTop: "ns-resize",
+  middleBottom: "ns-resize",
+  rightTop: "nesw-resize",
+  rightMiddle: "ew-resize",
+  rightBottom: "nwse-resize",
+}
+
+function drawSelectedArea(e) {
+  const x = e.clientX
+  const y = e.clientY
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  if (!resizeDirection || ['leftTop', 'leftBottom', 'rightTop', 'rightBottom'].includes(resizeDirection)) {
+    selectedArea = determineSelectedAreaCoordinate(x, y)
+  }
+  if (['leftMiddle', 'rightMiddle'].includes(resizeDirection)) {
+    selectedArea = determineSelectedAreaCoordinate(x, selectedArea.y + selectedArea.height)
+  }
+  if (['middleTop', 'middleBottom'].includes(resizeDirection)) {
+    selectedArea = determineSelectedAreaCoordinate(selectedArea.x + selectedArea.width, y)
+  }
+
+  // prevent error when get the selected image data from srcCanvas
+  if (!selectedArea.width || !selectedArea.height) {
+    return
+  }
+
+  drawImage()
+  drawBorder()
+  drawAnchors()
+}
+
+const determineSelectedAreaCoordinate = (x, y) => {
+  const width = x - startPosition.x
+  const height = y - startPosition.y
+  // keep the width and height always be positive
+  // so that the position property of anchors always be correct
+  return {
+    x: width > 0 ? startPosition.x : startPosition.x + width,
+    y: height > 0 ? startPosition.y : startPosition.y + height,
+    width: Math.abs(width),
+    height: Math.abs(height)
+  }
 }
