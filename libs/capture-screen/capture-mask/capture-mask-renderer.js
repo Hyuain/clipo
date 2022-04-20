@@ -45,6 +45,7 @@ let isDragging = false
 let startPosition
 let selectedArea
 let canvas
+let ctx
 const CANVAS_MARGIN = 8
 const ANCHOR_RADIUS = 4
 const COLOR =  {
@@ -58,16 +59,16 @@ document.addEventListener('mousedown', (e) => {
     x: e.clientX,
     y: e.clientY
   }
+
   canvas = document.createElement('canvas')
   canvas.className = 'draw-canvas'
-
   canvas.style.left = startPosition.x - CANVAS_MARGIN + 'px'
   canvas.style.top = startPosition.y - CANVAS_MARGIN + 'px'
   canvas.height = CANVAS_MARGIN
   canvas.width = CANVAS_MARGIN
 
+  ctx = canvas.getContext('2d')
   document.body.appendChild(canvas)
-  console.log(e)
 })
 
 document.addEventListener('mousemove', (e) => {
@@ -111,7 +112,6 @@ document.addEventListener('mouseup', (e) => {
 
 const drawImage = () => {
   const { x, y, width, height } = selectedArea
-  const ctx = canvas.getContext('2d')
 
   ctx.drawImage(bgCanvas, x, y, width, height, CANVAS_MARGIN, CANVAS_MARGIN, width, height)
   // const bgCtx = bgCanvas.getContext('2d')
@@ -121,7 +121,6 @@ const drawImage = () => {
 
 const drawBorder = () => {
   const { x, y, width, height } = selectedArea
-  const ctx = canvas.getContext('2d')
 
   ctx.fillStyle = COLOR.WHITE
   ctx.strokeStyle = COLOR.PRIMARY
@@ -131,12 +130,28 @@ const drawBorder = () => {
 
 const drawAnchors = () => {
   const { x, y, width, height } = selectedArea
-  const ctx = canvas.getContext('2d')
+  const anchors = [
+    { x: CANVAS_MARGIN, y: CANVAS_MARGIN },
+    { x: CANVAS_MARGIN, y: height / 2 + CANVAS_MARGIN },
+    { x: CANVAS_MARGIN, y: height + CANVAS_MARGIN },
+    { x: width / 2 + CANVAS_MARGIN, y: CANVAS_MARGIN },
+    { x: width / 2 + CANVAS_MARGIN, y: height + CANVAS_MARGIN },
+    { x: width + CANVAS_MARGIN, y: CANVAS_MARGIN },
+    { x: width + CANVAS_MARGIN, y: height / 2 + CANVAS_MARGIN },
+    { x: width + CANVAS_MARGIN, y: height + CANVAS_MARGIN },
+  ]
+  anchors.forEach((config) => {
+    drawAnchor(config)
+  })
 
+  drawAnchor(CANVAS_MARGIN, CANVAS_MARGIN)
+}
+
+const drawAnchor = ({ x, y }) => {
   const circle = new Path2D()
-  circle.arc(CANVAS_MARGIN, CANVAS_MARGIN, ANCHOR_RADIUS, 0, 2 * Math.PI)
+  circle.arc(x, y, ANCHOR_RADIUS, 0, 2 * Math.PI)
   const circleBorder = new Path2D()
-  circleBorder.arc(CANVAS_MARGIN, CANVAS_MARGIN, ANCHOR_RADIUS, 0, 2 * Math.PI)
+  circleBorder.arc(x, y, ANCHOR_RADIUS, 0, 2 * Math.PI)
   ctx.fillStyle = COLOR.PRIMARY
   ctx.strokeStyle = COLOR.WHITE
   ctx.lineWidth = 1
