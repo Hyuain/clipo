@@ -21,12 +21,16 @@ export class ScreenshotEditor {
   isDragging = false
   resizeDirection = null
   anchorsPaths = new Set()
+  borderPath = null
   startPosition = {}
   selectedArea = {}
 
-  constructor(container, { width, height, imageSource, defaultCursor }) {
+  onSelectionDone = (url) => {}
+
+  constructor(container, { width, height, imageSource, defaultCursor, onSelectionDone }) {
     this.container = container
     this.defaultCursor = defaultCursor || 'default'
+    this.onSelectionDone = onSelectionDone
 
     this.srcCanvas = document.createElement('canvas')
     this.srcCanvas.width = width
@@ -66,11 +70,19 @@ export class ScreenshotEditor {
     this.container.addEventListener('mousedown', (e) => this.handleMousedown(e))
     this.container.addEventListener('mousemove', (e) => this.handleMousemove(e))
     this.container.addEventListener('mouseup', (e) => this.handleMouseup(e))
+    this.container.addEventListener('dblclick', (e) => this.handleDblclick(e))
   }
 
   handleMousedown(e) {
+    const x = e.clientX
+    const y = e.clientY
+
+    if (this.borderPath && this.ctx.isPointInPath(this.borderPath, x, y)) { return }
+
     this.isDragging = true
     this.resizeDirection = null
+    this.borderPath = null
+
     for (const { path, position } of this.anchorsPaths) {
       if (this.ctx.isPointInPath(path, e.clientX, e.clientY)) {
         this.resizeDirection = position
@@ -103,17 +115,19 @@ export class ScreenshotEditor {
     }
   }
 
+  handleDblclick(e) {
+    const x = e.clientX
+    const y = e.clientY
+    if (!this.borderPath || !this.ctx.isPointInPath(this.borderPath, x, y)) {
+      return
+    }
+    this.onSelectionDone(this.getSelectionRes().toDataURL())
+  }
+
   handleMouseup(e) {
     this.isDragging = false
     this.resizeDirection = null
-    let { x, y, width, height } = this.selectedArea
-    const imageData = this.srcCanvas.getContext('2d').getImageData(x, y, width, height)
-    const resCanvas = document.createElement('canvas')
-    resCanvas.width = width
-    resCanvas.height = height
-    const resCtx = resCanvas.getContext('2d')
-    resCtx.putImageData(imageData, 0, 0)
-    ipcRenderer.send('finishedScreenshotEdit', resCanvas.toDataURL())
+    // this.onSelectionDone(resCanvas.toDataURL())
     this.setCursor()
   }
 
@@ -139,10 +153,13 @@ export class ScreenshotEditor {
   // draw border of the selection area
   drawBorder() {
     const { x, y, width, height } = this.selectedArea
+    const border = new Path2D()
+    border.rect(x, y, width, height)
     this.ctx.fillStyle = COLOR.WHITE
     this.ctx.strokeStyle = COLOR.PRIMARY
     this.ctx.lineWidth = 2
-    this.ctx.strokeRect(x, y, width, height)
+    this.ctx.stroke(border)
+    this.borderPath = border
   }
 
   // draw anchors in border of the selection area
@@ -278,5 +295,16 @@ export class ScreenshotEditor {
 
   clearCanvas(canvas) {
     canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
+  }
+
+  getSelectionRes() {
+    let { x, y, width, height } = this.selectedArea
+    const imageData = this.srcCanvas.getContext('2d').getImageData(x, y, width, height)
+    const resCanvas = document.createElement('canvas')
+    resCanvas.width = width
+    resCanvas.height = height
+    const resCtx = resCanvas.getContext('2d')
+    resCtx.putImageData(imageData, 0, 0)
+    return resCanvas
   }
 }

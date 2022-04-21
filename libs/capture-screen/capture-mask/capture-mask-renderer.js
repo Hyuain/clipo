@@ -10,15 +10,6 @@ setCursor('none')
 
 ipcRenderer.send('captureMaskReady')
 
-// the canvas to save the original screenshot data
-let srcCanvas
-// the background canvas, containing the screenshot and the gray mask
-let bgCanvas
-// the canvas to draw the selection area
-let canvas
-// the context of the canvas of the selection area
-let ctx
-
 ipcRenderer.on('gotRawScreenshot', async (event, sourceId) => {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
@@ -47,6 +38,9 @@ ipcRenderer.on('gotRawScreenshot', async (event, sourceId) => {
       height: video.videoHeight,
       imageSource: video,
       defaultCursor,
+      onSelectionDone: (url) => {
+        ipcRenderer.send('finishedScreenshotEdit', url)
+      }
     })
     screenshotEditor.init()
 

@@ -38,6 +38,12 @@ const showCaptureMask = () => {
     captureMask = null
   })
 
+  captureMask.webContents.on('before-input-event', (e, input) => {
+    if (input.key === 'Escape') {
+      captureMask.close()
+    }
+  })
+
   ipcMain.once('captureMaskReady', () => {
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
       captureMask.webContents.send('gotRawScreenshot', sources[0].id)
